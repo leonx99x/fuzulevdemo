@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "sDs7vbZnwqqDfjXxRMKtSuBgVGXEf6r9WJ+KmOv3LqQ=",
+  "Source": "RealEstateSearchService",
+  "BasePath": "_content/RealEstateSearchService",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
