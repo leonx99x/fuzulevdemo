@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models; // For Swagger configuration
-using Nest; // For Elasticsearch
-using RealEstateSearchService.Data; // Ensure this namespace points to where ApplicationDbContext is located
-using RealEstateSearchService.Services; // Assuming your service implementations are here
+using Microsoft.OpenApi.Models;
+using Nest;
+using RealEstateSearchService.Data;
+using RealEstateSearchService.Data.Seeding;
+using RealEstateSearchService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,7 +39,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Real Estate Search API V1"));
 }
-
+SeedTestData(app.Services.CreateScope().ServiceProvider);
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
@@ -46,3 +47,56 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+void SeedTestData(IServiceProvider serviceProvider)
+{
+    using (var scope = serviceProvider.CreateScope())
+    {
+        var scopedProvider = scope.ServiceProvider;
+        var context = scopedProvider.GetRequiredService<ApplicationDbContext>();
+
+        bool migrated = false;
+        int retryCount = 0;
+        while (!migrated && retryCount < 5)
+        {
+            try
+            {
+                context.Database.Migrate();
+                migrated = true;
+            }
+            catch (Npgsql.PostgresException ex) when (ex.SqlState == "57P03")
+            {
+                Console.WriteLine("Database is starting up, waiting...");
+                Thread.Sleep(5000); // wait for 5 seconds
+                retryCount++;
+            }
+        }
+
+        if (migrated)
+        {
+            var elasticClient = scopedProvider.GetRequiredService<IElasticClient>();
+            var testData = TestDataInitializer.GetTestPropertyListings();
+
+            if (!context.PropertyListings.Any())
+            {
+                context.AddRange(testData);
+                context.SaveChanges();
+
+                foreach (var listing in testData)
+                {
+                    var indexResponse = elasticClient.IndexDocument(listing);
+                    if (!indexResponse.IsValid)
+                    {
+                        Console.WriteLine($"Failed to index document {listing.Id}");
+                    }
+                }
+            }
+        }
+        else
+        {
+            Console.WriteLine("Failed to migrate the database within the retry limit.");
+        }
+
+
+    }
+}

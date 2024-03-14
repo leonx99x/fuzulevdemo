@@ -24,7 +24,8 @@ public class PropertyListingsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetPropertyListing(int id)
     {
-        throw new NotImplementedException();
+        await _propertyListingService.GetPropertyListing(id);
+        return Ok();
     }
 
     [HttpPut("{id}")]
@@ -39,12 +40,5 @@ public class PropertyListingsController : ControllerBase
     {
         await _propertyListingService.DeletePropertyListing(id);
         return NoContent();
-    }
-
-    [HttpGet("search")]
-    public async Task<IActionResult> SearchListings([FromQuery] string location, [FromQuery] decimal? minPrice, [FromQuery] decimal? maxPrice, [FromQuery] string propertyType)
-    {
-        var listings = await _propertyListingService.SearchListings(location, minPrice, maxPrice, propertyType);
-        return Ok(listings);
     }
 }

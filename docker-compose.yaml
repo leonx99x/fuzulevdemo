@@ -6,21 +6,28 @@ services:
       context: ./real-estate-search
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3000:80"  # Ensure this matches the port your frontend server listens on
     depends_on:
       - backend
+    networks:
+      - mynetwork
 
   backend:
     build:
       context: ./RealEstateSearchService
       dockerfile: Dockerfile
     ports:
-      - "8000:80"
+      - "8000:80"  # Ensure this matches the port your backend server listens on
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - Elastic__Uri=http://elasticsearch:9200
+      - "Elasticsearch:Uri=http://elasticsearch:9200"
+      - "Elasticsearch:DefaultIndex=real-estate-listings"
+      - "ConnectionStrings:DefaultConnection=Host=db;Database=realestatedb;Username=koray;Password=avwefaw45qer2q34253..8319264"
     depends_on:
       - elasticsearch
+      - db
+    networks:
+      - mynetwork
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
@@ -30,8 +37,10 @@ services:
       - "9200:9200"
     volumes:
       - esdata1:/usr/share/elasticsearch/data
+    networks:
+      - mynetwork
 
-  postgres:
+  db:
     image: postgres:latest
     environment:
       POSTGRES_USER: koray
@@ -41,9 +50,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mynetwork
 
 volumes:
   esdata1:
     driver: local
-  postgres-data: 
+  postgres-data:
     driver: local
+
+networks:
+  mynetwork:
+    driver: bridge  

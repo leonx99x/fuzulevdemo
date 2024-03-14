@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Nest;
+using RealEstateSearchService.Data;
 using RealEstateSearchService.Model;
 
 [ApiController]
@@ -7,17 +8,17 @@ using RealEstateSearchService.Model;
 public class SearchController : ControllerBase
 {
     private readonly IElasticClient _elasticClient;
+    private readonly ApplicationDbContext _context;
 
-    public SearchController(IElasticClient elasticClient)
+    public SearchController(IElasticClient elasticClient, ApplicationDbContext context)
     {
         _elasticClient = elasticClient;
+        _context = context;
     }
 
     [HttpGet]
     public async Task<IActionResult> Search(string location, string priceRange, string propertyType)
     {
-        // Construct the query based on input
-        // For simplicity, we are using a match query, consider using a more complex query for production
         var searchResponse = await _elasticClient.SearchAsync<PropertyListing>(s => s
             .Query(q => q
                 .Bool(b => b
@@ -30,7 +31,6 @@ public class SearchController : ControllerBase
 
         if (!searchResponse.IsValid)
         {
-            // Handle error
             return BadRequest();
         }
 
@@ -39,26 +39,67 @@ public class SearchController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PropertyListing listing)
     {
-        // Add to PostgreSQL
-        // Sync with Elasticsearch
+        _context.PropertyListings.Add(listing);
+        await _context.SaveChangesAsync();
+
+        var indexResponse = await _elasticClient.IndexDocumentAsync(listing);
+
+        if (!indexResponse.IsValid)
+        {
+            return BadRequest();
+        }
+
+        return CreatedAtAction(nameof(Search), new { id = listing.Id }, listing);
 
         return Ok();
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] PropertyListing listing)
+    public async Task<IActionResult> Update(int id, [FromBody] PropertyListing updatedListing)
     {
-        // Update in PostgreSQL
-        // Sync with Elasticsearch
+        var existingListing = await _context.PropertyListings.FindAsync(id);
+        if (existingListing == null)
+        {
+            return NotFound();
+        }
 
-        return Ok();
+
+        existingListing.Location = updatedListing.Location;
+        existingListing.Price = updatedListing.Price;
+        existingListing.PropertyType = updatedListing.PropertyType;
+
+
+        await _context.SaveChangesAsync();
+
+        var indexResponse = await _elasticClient.IndexDocumentAsync(existingListing); // IndexDocumentAsync updates if ID exists
+
+        if (!indexResponse.IsValid)
+        {
+
+            return BadRequest();
+        }
+
+        return Ok(existingListing);
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        // Delete from PostgreSQL
-        // Remove from Elasticsearch
+        var listing = await _context.PropertyListings.FindAsync(id);
+        if (listing == null)
+        {
+            return NotFound();
+        }
+
+        _context.PropertyListings.Remove(listing);
+        await _context.SaveChangesAsync();
+
+        var deleteResponse = await _elasticClient.DeleteAsync<PropertyListing>(id);
+
+        if (!deleteResponse.IsValid)
+        {
+            return BadRequest();
+        }
 
         return Ok();
     }
